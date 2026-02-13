@@ -7,8 +7,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 logging.basicConfig(level=logging.INFO)
 TOKEN = os.environ.get("TOKEN")
 UPDATE_CHUNK_MIN = 5 
-
-active_timers = {}
+CHANNEL_ID = "@ProstoMeditation" 
 
 def humanize_minutes(total_min: int) -> str:
     if total_min <= 0: return "0 м"
@@ -34,60 +33,24 @@ def parse_to_minutes(s: str) -> int:
     if num and not total: total = int(num)
     return total
 
-# Функция сборки текста: время жирным в начале, затем ваш текст
-def render_text(mins, txt):
-    return f"⌛ <b>Осталось: {humanize_minutes(mins)}</b>\n{txt}"
-
-async def cmd_start_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    if not context.args: return
-    time_arg = context.args[0] 
-    label = " ".join(context.args[1:])
+async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Формат: /run [ID сообщения] [время] [текст]
+    if len(context.args) < 3: return
+    msg_id = int(context.args[0])
+    minutes = parse_to_minutes(context.args[1])
+    label = " ".join(context.args[2:])
     
-    total_minutes = parse_to_minutes(time_arg)
-    if total_minutes <= 0: return
-    if chat_id in active_timers: active_timers[chat_id].cancel()
-    
-    # Отправка с отключенным превью ссылки и поддержкой HTML
-    msg = await update.message.reply_text(
-        render_text(total_minutes, label),
-        parse_mode=ParseMode.HTML,
-        link_preview_options=LinkPreviewOptions(is_disabled=True)
-    )
+    await update.message.reply_text(f"🚀 Запустил обновление поста {msg_id}")
 
-    async def run_timer(minutes, message_id, current_label):
+    while minutes > 0:
         try:
-            while minutes > 0:
-                await asyncio.sleep(UPDATE_CHUNK_MIN * 60)
-                minutes -= UPDATE_CHUNK_MIN
-                if minutes < 0: minutes = 0
-                try:
-                    await context.bot.edit_message_text(
-                        chat_id=chat_id, message_id=message_id,
-                        text=render_text(minutes, current_label),
-                        parse_mode=ParseMode.HTML,
-                        link_preview_options=LinkPreviewOptions(is_disabled=True)
-                    )
-                except: break 
-            if minutes <= 0:
-                try: await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"✅ <b>Время вышло!</b>\n{current_label}", parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True))
-                except: pass
-        except asyncio.CancelledError: pass
-    active_timers[chat_id] = asyncio.create_task(run_timer(total_minutes, msg.message_id, label))
-
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200); self.end_headers(); self.wfile.write(b"OK")
-
-def run_health_server():
-    port = int(os.environ.get("PORT", "8080"))
-    HTTPServer(("0.0.0.0", port), HealthHandler).serve_forever()
-
-def main():
-    if not TOKEN: return
-    threading.Thread(target=run_health_server, daemon=True).start()
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start_timer", cmd_start_timer))
-    app.run_polling()
-
-if __name__ == "__main__": main()
+            await context.bot.edit_message_text(
+                chat_id=CHANNEL_ID,
+                message_id=msg_id,
+                text=f"⌛ <b>Осталось: {humanize_minutes(minutes)}</b>\n{label}",
+                parse_mode=ParseMode.HTML,
+                link_preview_options=LinkPreviewOptions(is_disabled=True)
+            )
+        except Exception as e:
+            logging.error(f"Ошибка: {e}")
+        await asyncio.sleep(UPDATE_CHUNK_
