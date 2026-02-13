@@ -34,9 +34,9 @@ def parse_to_minutes(s: str) -> int:
     if num and not total: total = int(num)
     return total
 
-# Функция рендера: время в начале, текст сразу под ним БЕЗ пустой строки
+# Функция сборки текста: время жирным в начале, затем ваш текст
 def render_text(mins, txt):
-    return f"*⌛ Осталось: {humanize_minutes(mins)}*\n{txt}"
+    return f"⌛ <b>Осталось: {humanize_minutes(mins)}</b>\n{txt}"
 
 async def cmd_start_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -46,12 +46,12 @@ async def cmd_start_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     total_minutes = parse_to_minutes(time_arg)
     if total_minutes <= 0: return
-    
     if chat_id in active_timers: active_timers[chat_id].cancel()
     
+    # Отправка с отключенным превью ссылки и поддержкой HTML
     msg = await update.message.reply_text(
         render_text(total_minutes, label),
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
         link_preview_options=LinkPreviewOptions(is_disabled=True)
     )
 
@@ -65,15 +65,14 @@ async def cmd_start_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.edit_message_text(
                         chat_id=chat_id, message_id=message_id,
                         text=render_text(minutes, current_label),
-                        parse_mode=ParseMode.MARKDOWN,
+                        parse_mode=ParseMode.HTML,
                         link_preview_options=LinkPreviewOptions(is_disabled=True)
                     )
                 except: break 
             if minutes <= 0:
-                try: await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"*✅ Время вышло!*\n{current_label}", parse_mode=ParseMode.MARKDOWN)
+                try: await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"✅ <b>Время вышло!</b>\n{current_label}", parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True))
                 except: pass
         except asyncio.CancelledError: pass
-
     active_timers[chat_id] = asyncio.create_task(run_timer(total_minutes, msg.message_id, label))
 
 class HealthHandler(BaseHTTPRequestHandler):
