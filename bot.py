@@ -1,6 +1,6 @@
 import os, asyncio, threading, logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from telegram import Update
+from telegram import Update, LinkPreviewOptions
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -34,25 +34,25 @@ def parse_to_minutes(s: str) -> int:
     if num and not total: total = int(num)
     return total
 
+# Функция рендера: время в начале, текст сразу под ним БЕЗ пустой строки
+def render_text(mins, txt):
+    return f"*⌛ Осталось: {humanize_minutes(mins)}*\n{txt}"
+
 async def cmd_start_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if not context.args: return
     time_arg = context.args[0] 
-    label = "" if len(context.args) == 1 else " ".join(context.args[1:])
-    try:
-        total_minutes = parse_to_minutes(time_arg)
-        if total_minutes <= 0: return
-    except: return
+    label = " ".join(context.args[1:])
+    
+    total_minutes = parse_to_minutes(time_arg)
+    if total_minutes <= 0: return
     
     if chat_id in active_timers: active_timers[chat_id].cancel()
     
-    # ФОРМАТ: Сначала время, потом текст (через перенос строки)
-    def render_text(mins, txt):
-        return f"⌛ <b>Осталось: {humanize_minutes(mins)}</b>\n\n{txt}"
-
     msg = await update.message.reply_text(
         render_text(total_minutes, label),
-        parse_mode=ParseMode.HTML
+        parse_mode=ParseMode.MARKDOWN,
+        link_preview_options=LinkPreviewOptions(is_disabled=True)
     )
 
     async def run_timer(minutes, message_id, current_label):
@@ -65,13 +65,15 @@ async def cmd_start_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.edit_message_text(
                         chat_id=chat_id, message_id=message_id,
                         text=render_text(minutes, current_label),
-                        parse_mode=ParseMode.HTML
+                        parse_mode=ParseMode.MARKDOWN,
+                        link_preview_options=LinkPreviewOptions(is_disabled=True)
                     )
                 except: break 
             if minutes <= 0:
-                try: await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"✅ <b>Время вышло!</b>\n\n{current_label}", parse_mode=ParseMode.HTML)
+                try: await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=f"*✅ Время вышло!*\n{current_label}", parse_mode=ParseMode.MARKDOWN)
                 except: pass
         except asyncio.CancelledError: pass
+
     active_timers[chat_id] = asyncio.create_task(run_timer(total_minutes, msg.message_id, label))
 
 class HealthHandler(BaseHTTPRequestHandler):
